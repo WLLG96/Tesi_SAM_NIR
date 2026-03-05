@@ -1,0 +1,76 @@
+dataset:
+  train_data_root: "/Users/lindawandjilando/datasets/rgb2nir_dataset_real/splits/train"
+  val_data_root:   "/Users/lindawandjilando/datasets/rgb2nir_dataset_real/splits/val"
+  test_data_root:  "/Users/lindawandjilando/datasets/rgb2nir_dataset_real/splits/test"
+  img_size: 128
+  batch_size: 1
+  num_epochs: 10
+
+norm:
+  mean_red: 0.0
+  std_red: 1.0
+  mean_green: 0.0
+  std_green: 1.0
+  mean_nir: 0.0
+  std_nir: 1.0
+
+  min_r: 0.0
+  max_r: 65535.0
+  min_g: 0.0
+  max_g: 65535.0
+  min_n: 0.0
+  max_n: 65535.0
+
+super_res:
+  model:
+    in_chans: 2
+    out_chans: 1
+
+    embed_dim: 96
+    depths: [2, 2, 6, 2]
+    num_heads: [3, 6, 12, 24]
+    window_size: 8
+    mlp_ratio: 4.0
+    qkv_bias: true
+
+    drop_rate: 0.0
+    attn_drop_rate: 0.0
+    drop_path_rate: 0.1
+
+    norm_layer: layernorm
+    ape: false
+    patch_norm: true
+    use_checkpoint: false
+
+    upscale: 1
+    img_range: 1.0
+    upsampler: ""
+    resi_connection: "1conv"
+
+opt:
+  lr: 1.0e-5
+  betas: [0.5, 0.999]
+
+train:
+  log_every: 50
+  grad_clip: 1.0
+  use_amp: false   # su Mac/MPS lascialo false
+
+val:
+  # usa validate separato: qui serve solo a validate.py
+  max_batches: null
+  save_every: 10
+  log_every: 10
+
+paths:
+  save_dir: "./checkpoint_model"
+  save_every: 1
+
+  # 👇 checkpoint da validare (puoi cambiarlo dopo ogni epoca, oppure passare --ckpt)
+  resume_ckpt: "./checkpoint_model/ckpt_epoch_001.pth"
+
+  results_dir: "./results"
+  test_results_dir: "./test_results"
+  validation_results_dir: "./validation_results"
+  generated_images_dir: "./generated_image"
+  log_dir: "./logs"

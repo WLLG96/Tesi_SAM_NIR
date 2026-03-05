@@ -1,0 +1,68 @@
+dataset:
+  train_data_root: '/hpc/home/alex.malavolta/tesi/mean-std_uniti/dataset/train'
+  val_data_root: '/hpc/home/alex.malavolta/tesi/mean-std_uniti/dataset/val'
+  test_data_root: '/hpc/home/alex.malavolta/tesi/mean-std_uniti/dataset/test'
+ 
+  collate_fn: mods.v3.collate_fn
+  denorm: mods.v3.uncollate_fn
+  printable: mods.v3.printable
+  img_size: 128
+  batch_size: 1
+  num_epochs: 100
+
+
+opt:
+  lr: 0.0001
+  betas: [0.5, 0.999]
+  
+norm:
+  mean_red: 10477.6025390625
+  std_red: 3933.4228515625
+  mean_green: 13977.609375
+  std_green: 4749.7568359375
+  mean_nir: 15139.8837890625
+  std_nir: 4042.323974609375
+  
+  min_r: 3376.0 
+  max_r: 65520.0
+  min_g: 3600.0
+  max_g: 65520.0
+  min_n: 3552.0
+  max_n: 65520.0 
+
+super_res: {
+  version: 'v2',
+  model: {
+    upscale: 1,
+    use_lepe: true,
+    use_cpb_bias: false,
+    use_rpe_bias: true,
+    mlp_ratio: 1,
+    MoE_config: {
+      k: 2,
+      num_experts: 8,
+      with_noise: false,
+      with_smart_merger: v1,
+    },
+    depths: [6, 6, 6, 6],
+    embed_dim: 90,
+    img_range: 1.,
+    img_size: 64,
+    in_chans: 2,
+    num_heads: [6, 6, 6, 6],
+    resi_connection: 1conv,
+    upsampler: pixelshuffledirect,
+    window_size: 16,
+  }
+}
+
+
+
+
+paths:
+  save_dir: './checkpoint_model'
+  results_dir: './results'
+  test_results_dir: './test_results'
+  validation_results_dir: './validation_results'
+  generated_images_dir: './generated_image'
+  log_dir: './logs'
