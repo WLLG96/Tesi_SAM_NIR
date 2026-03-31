@@ -1,20 +1,17 @@
-# python
+.venv/
 __pycache__/
 *.pyc
 .DS_Store
 
-# output training
+checkpoints/sam_vit_b_01ec64.pth
+sam_nir/checkpoints/
+sam_nir/logs/
+sam_nir/predictions/
+sam_nir/ndvi_predictions/
+sam_nir/demo_outputs/
+
 checkpoint_model/
-logs/
 results/
 validation_results/
 test_results/
-generated_image/
-
-# dataset
-datasets/
-data_raw/
-
-# immagini grandi
-*.tif
-*.tiff
+logs/
