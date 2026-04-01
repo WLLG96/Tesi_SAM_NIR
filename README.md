@@ -1,345 +1,308 @@
-<<<<<<< HEAD
-# Predizione della banda NIR da immagini RGB e calcolo NDVI
-
-## Descrizione del progetto
-
-Questo progetto ha l'obiettivo di **stimare la banda Near Infrared (NIR)** a partire da immagini RGB utilizzando una rete neurale basata su **Swin Transformer (Swin2MoSE)**.
-
-Una volta stimata la banda NIR, viene calcolato l'indice di vegetazione **NDVI (Normalized Difference Vegetation Index)**, utilizzato per analizzare lo stato della vegetazione.
-
-Il sistema include inoltre **Segment Anything (SAM)** per permettere all’utente di selezionare una regione dell'immagine (ad esempio un campo agricolo) e visualizzare l’NDVI solo nell’area selezionata.
+# Tesi Magistrale — Generazione banda NIR e NDVI da immagini RGB con baseline Swin2MoSE e integrazione SAM
 
 ---
 
-# Pipeline del sistema
+## Descrizione del progetto
 
-Il sistema segue la seguente pipeline:
+Questo progetto affronta il problema della **stima della banda Near Infrared (NIR)** a partire da immagini RGB/multibanda e del calcolo dell’**NDVI (Normalized Difference Vegetation Index)**.
 
-1. Acquisizione di immagini RGB da drone
-2. Predizione della banda **NIR** tramite rete neurale
-3. Calcolo dell'indice **NDVI**
+Il lavoro è strutturato in due parti principali:
 
-Formula utilizzata:
+1. **Baseline RGB → NIR → NDVI**
+   Modello basato su **Swin2MoSE**
 
-```
-NDVI = (NIR - R) / (NIR + R)
-```
+2. **Integrazione SAM (Segment Anything Model)**
+   Uso dell’**image encoder di SAM** per generare la banda NIR + demo interattiva con click utente
 
-4. Segmentazione della regione di interesse tramite **Segment Anything**
-5. Calcolo delle statistiche NDVI nella regione selezionata
+---
+
+## Obiettivo finale
+
+Costruire una pipeline che permetta:
+
+1. Input immagine RGB
+2. Click su una regione di interesse
+3. Segmentazione con SAM
+4. Predizione della banda NIR
+5. Calcolo NDVI
+6. Visualizzazione NDVI sulla regione
+7. Calcolo statistiche locali
 
 ---
 
 # Struttura del progetto
 
 ```
-swin2nir/
+TESI_SAM_NIR/
 
 configs/
-    config_linda.yaml
-
 data/
-    dataset_cropped.py
-
 train/
-    train.py
-    validate.py
+test_/
+
+Sam_LoRA/
+sam_nir/
 
 model.py
-utils.py
 main_nvdi.py
-
-checkpoint_model/
-results/
-validation_results/
-test_results/
-logs/
+utils.py
 ```
 
 ---
 
 # Dataset
 
-Il dataset è composto da immagini multispettrali TIF contenenti tre bande:
-
-* banda **R**
-* banda **G**
-* banda **NIR**
-
-Ogni campione è composto da tre file:
+Il dataset è composto da triplette:
 
 ```
-prefix_R.TIF
-prefix_G.TIF
-prefix_NIR.TIF
+*_R.TIF
+*_G.TIF
+*_NIR.TIF
 ```
 
-Il dataset loader:
+Il loader:
 
-* carica le tre bande
+* carica le bande
 * applica crop coerente
-* normalizza i valori delle immagini
-* restituisce tensori PyTorch.
+* normalizza
+* restituisce tensori PyTorch
 
-Input del modello:
+---
 
-```
-[R, G]
-```
-
-Output del modello:
+# Formula NDVI
 
 ```
-NIR
+NDVI = (NIR - R) / (NIR + R)
 ```
 
 ---
 
-# File di configurazione
+# PARTE 1 — BASELINE (Swin2MoSE)
 
-Il file di configurazione principale è:
+## Input / Output
 
 ```
-configs/config_linda.yaml
+Input:  R + G
+Output: NIR
+```
+
+---
+
+## Training baseline
+
+```bash
+python main_nvdi.py --function train --config configs/config_linda.yaml --epochs 3
+```
+
+---
+
+## Validazione baseline
+
+```bash
+PYTHONPATH=. python main_nvdi.py \
+--function validate \
+--config configs/config_linda.yaml \
+--ckpt ./checkpoint_model/ckpt_epoch_001.pth --image resize
+
+PYTHONPATH=. python main_nvdi.py \
+--function validate \
+--config configs/config_linda.yaml \
+--ckpt ./checkpoint_model/ckpt_epoch_002.pth --image resize
+
+PYTHONPATH=. python main_nvdi.py \
+--function validate \
+--config configs/config_linda.yaml \
+--ckpt ./checkpoint_model/ckpt_epoch_003.pth --image resize
+```
+
+---
+
+## Test baseline
+
+```bash
+PYTHONPATH=. python main_nvdi.py \
+--function test \
+--config configs/config_linda.yaml \
+--ckpt ./checkpoint_model/ckpt_epoch_002.pth --image resize
+```
+
+---
+
+## Metriche baseline
+
+* PSNR
+* SSIM
+* PSNR NDVI
+* SSIM NDVI
+
+---
+
+# PARTE 2 — INTEGRAZIONE SAM
+
+## Idea
+
+Usare l’encoder di SAM come backbone:
+
+```
+[R, G, G] → SAM encoder → decoder → NIR
+```
+
+---
+
+## Setup SAM
+
+```bash
+mkdir -p checkpoints
+curl -L https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth \
+-o checkpoints/sam_vit_b_01ec64.pth
+```
+
+---
+
+## Test encoder SAM
+
+```bash
+python sam_nir/smoke_test_sam_nir.py
+```
+
+Output atteso:
+
+```
+output shape: torch.Size([1, 1, 1024, 1024])
+```
+
+---
+
+## Training SAM → NIR
+
+```bash
+python sam_nir/train_sam_nir.py
+```
+
+Output:
+
+```
+sam_nir/checkpoints/
+```
+
+---
+
+## Inferenza NIR (SAM)
+
+```bash
+python sam_nir/infer_sam_nir.py
+```
+
+Output:
+
+```
+sam_nir/predictions/
+```
+
+---
+
+## Inferenza NDVI (SAM)
+
+```bash
+python sam_nir/infer_sam_ndvi.py
+```
+
+Output:
+
+```
+sam_nir/ndvi_predictions/
+```
+
+---
+
+# PARTE 3 — CONFRONTO BASELINE vs SAM
+
+```bash
+PYTHONPATH=. python sam_nir/compare_sam_vs_baseline.py
+```
+
+---
+
+## Risultati ottenuti
+
+### Baseline
+
+* PSNR: 17.88
+* SSIM: 0.44
+* PSNR NDVI: 23.34
+* SSIM NDVI: 0.67
+
+### SAM
+
+* PSNR: 23.68
+* SSIM: 0.48
+* PSNR NDVI: 24.83
+* SSIM NDVI: 0.64
+
+---
+
+## Interpretazione
+
+* SAM migliora la qualità della NIR
+* migliora PSNR NDVI
+* output più smooth → leggero calo SSIM NDVI
+
+---
+
+# PARTE 4 — DEMO INTERATTIVA
+
+## Esecuzione
+
+```bash
+PYTHONPATH=. python sam_nir/demo_click_sam_ndvi.py \
+--image /Users/.../immagine.png
+```
+
+---
+
+## Pipeline
+
+1. input immagine RGB
+2. click utente
+3. segmentazione SAM
+4. predizione NIR
+5. calcolo NDVI
+6. overlay NDVI
+7. statistiche locali
+
+---
+
+## Output demo
+
+```
+sam_nir/demo_outputs/
 ```
 
 Contiene:
 
-* percorsi dataset
-* parametri del modello
-* parametri di training
-* directory per risultati e checkpoint
+* maschera SAM
+* NIR predetta
+* NDVI
+* overlay
+* report
+* statistiche JSON
 
 ---
 
-# Training del modello
-
-Per avviare il training utilizzare il comando:
+# Dipendenze
 
 ```bash
-python main_nvdi.py --function train --config configs/config_linda.yaml
-```
-
-Durante il training:
-
-* il dataset viene caricato tramite DataLoader
-* il modello Swin2MoSE viene inizializzato
-* viene utilizzata la **loss MSE**
-* i checkpoint vengono salvati automaticamente
-
-I checkpoint vengono salvati nella cartella:
-
-```
-checkpoint_model/
-```
-
-Esempio:
-
-```
-ckpt_epoch_010.pth
+python3 -m venv .venv
+source .venv/bin/activate
+pip install torch torchvision numpy matplotlib opencv-python pillow tqdm pyyaml timm safetensors
 ```
 
 ---
 
-# Riprendere il training
+# Limitazioni
 
-È possibile riprendere il training da un checkpoint:
+* input SAM adattato `[R, G, G]`
+* SAM non fine-tuned su campi coltivati
+* output SAM più smooth
 
-```bash
-python main_nvdi.py \
---function train \
---config configs/config_linda.yaml \
---resume checkpoint_model/ckpt_epoch_005.pth
-```
 
----
-
-# Validazione del modello
-
-Per eseguire la validazione:
-
-```bash
-python main_nvdi.py --function validate --config configs/config_linda.yaml
-```
-
-Durante la validazione vengono calcolate le seguenti metriche:
-
-* PSNR
-* SSIM
-* PSNR su NDVI
-* SSIM su NDVI
-
-I risultati vengono salvati nella cartella:
-
-```
-results/
-```
-
-Esempio:
-
-```
-val_metrics_epoch_010.txt
-val_metrics_epoch_010.json
-val_metrics.csv
-```
-
----
-
-# Test del modello
-
-Per testare un modello addestrato:
-
-```bash
-python main_nvdi.py \
---function test \
---config configs/config_linda.yaml \
---ckpt checkpoint_model/ckpt_epoch_010.pth
-```
-
----
-
-# Visualizzazione dei risultati
-
-Durante la validazione vengono generate immagini di confronto:
-
-```
-R | G | NIR predetto | NIR reale | NDVI predetto | NDVI reale
-```
-
-Salvate nella cartella:
-
-```
-validation_results/
-```
-
----
-
-# Architettura del modello
-
-Il modello utilizzato è basato su **Swin Transformer**.
-
-Caratteristiche principali:
-
-* self-attention su finestre locali
-* architettura gerarchica
-* residual connections
-* patch embedding
-
-Input del modello:
-
-```
-R + G
-```
-
-Output del modello:
-
-```
-NIR predetto
-```
-
----
-
-# Metriche utilizzate
-
-### PSNR
-
-Misura la qualità della ricostruzione dell'immagine.
-
-### SSIM
-
-Misura la similarità strutturale tra immagini.
-
-### NDVI
-
-Confronto tra NDVI reale e NDVI calcolato usando la NIR predetta.
-
----
-
-# Dipendenze principali
-
-Il progetto utilizza:
-
-```
-python
-pytorch
-torchvision
-numpy
-opencv
-tqdm
-scikit-image
-torchmetrics
-gradio
-```
-
-Installazione:
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-# Autore
-
-Progetto di Tesi Magistrale
-Predizione della banda NIR da immagini RGB e calcolo NDVI per monitoraggio della vegetazione.
-=======
-# Segmentazione e Predizione della Banda NIR con SAM e LoRA
-
----
-
-## Obiettivo
-
-Immagine RGB → Encoder di SAM → Rete neurale → Banda NIR (output)
-
-La banda NIR è utile per il calcolo di indici di vegetazione come l’**NDVI (Normalized Difference Vegetation Index)**,
-che permette di stimare lo stato di salute delle colture.
-
----
-
-##  Struttura del progetto
-
-tesi/
- ├── code/
- │   └── Sam_LoRA/
- │       ├── train_nir_head.py
- │       ├── infer_and_ndvi.py
- │       ├── sam_click_ndvi.py
- │       ├── nir_dataset.py
- │       ├── sam_encoder_features.py
- │       ├── segment_anything/
- │       ├── runs_nir_head/
- │       └── runs_demo_click/
- └── data/
-     ├── rgb2nir/
-     └── field_with_road.png
-
----
-
-## Esecuzione
-
-### Training
-cd ~/tesi/code/Sam_LoRA
-python train_nir_head.py
-
-### Inferenza su dataset
-python infer_and_ndvi.py
-
-### Demo interattiva su immagine RGB
-python sam_click_ndvi.py ~/tesi/data/field_with_road.png
-
----
-
-## Esempio di output
-
-Cartella: `runs_demo_click/`
-
-- *_rgb.png → immagine originale
-- *_sam_mask.png → maschera SAM
-- *_overlay.png → maschera + immagine
-- *_nir_pred.png → banda NIR predetta
-- *_ndvi_jet.png → mappa NDVI colorata
-- *_ndvi_stats.txt → valori numerici NDVI
-
----
->>>>>>> 7790f84c47b097fc538956052817f84914359d85
