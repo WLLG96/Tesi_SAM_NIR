@@ -1,0 +1,20 @@
+{
+  "roi_definition": "ndvi_true > 0.3",
+  "baseline_roi": {
+    "psnr": 22.132965218692966,
+    "ssim": 0.4267936839556718,
+    "psnr_ndvi": 24.880587800354977,
+    "ssim_ndvi": 0.6881595913907548,
+    "valid_ssim_images": 72
+  },
+  "sam_roi": {
+    "psnr": 23.106058063168597,
+    "ssim": 0.4704039306372134,
+    "psnr_ndvi": 25.96906110690196,
+    "ssim_ndvi": 0.654859453624209,
+    "valid_ssim_images": 72
+  },
+  "n_images": 74,
+  "n_images_with_roi": 74,
+  "mean_roi_pixels": 5715.743243243243
+}

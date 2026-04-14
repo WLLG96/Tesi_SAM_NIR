@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 .DS_Store
+*.pth
+*.zip
 
 checkpoints/sam_vit_b_01ec64.pth
 sam_nir/checkpoints/
@@ -15,3 +17,6 @@ results/
 validation_results/
 test_results/
 logs/
+checkpoint_model/
+checkpoints/
+
