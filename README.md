@@ -1,308 +1,156 @@
-# Tesi Magistrale — Generazione banda NIR e NDVI da immagini RGB con baseline Swin2MoSE e integrazione SAM
+# Tesi Magistrale — Generazione NIR e NDVI da immagini RGB con Swin2MoSE e SAM + LoRA
+
+## Obiettivo
+
+Il progetto studia la generazione della banda **NIR** a partire da immagini RGB e il calcolo dell'**NDVI** per applicazioni di agricoltura di precisione.
+
+Sono confrontati:
+
+1. **Baseline Swin2MoSE**
+2. **SAM + LoRA (RGB → NIR)**
+3. **SAM + LoRA con loss migliorata (Edge + NDVI + Gradient)**
 
 ---
 
-## Descrizione del progetto
+## Problema iniziale
 
-Questo progetto affronta il problema della **stima della banda Near Infrared (NIR)** a partire da immagini RGB/multibanda e del calcolo dell’**NDVI (Normalized Difference Vegetation Index)**.
+Il modello SAM iniziale produceva:
 
-Il lavoro è strutturato in due parti principali:
+* mappe **troppo smooth**
+* perdita di dettagli locali
+* distribuzione NDVI poco realistica
+* **SSIM NDVI peggiore della baseline**
 
-1. **Baseline RGB → NIR → NDVI**
-   Modello basato su **Swin2MoSE**
-
-2. **Integrazione SAM (Segment Anything Model)**
-   Uso dell’**image encoder di SAM** per generare la banda NIR + demo interattiva con click utente
-
----
-
-## Obiettivo finale
-
-Costruire una pipeline che permetta:
-
-1. Input immagine RGB
-2. Click su una regione di interesse
-3. Segmentazione con SAM
-4. Predizione della banda NIR
-5. Calcolo NDVI
-6. Visualizzazione NDVI sulla regione
-7. Calcolo statistiche locali
+👉 causa principale: loss solo pixel-wise (MSE + L1)
 
 ---
 
-# Struttura del progetto
+## Soluzione proposta
+
+Introduzione di una loss combinata:
+
+* MSE loss
+* L1 loss
+* Edge loss (preserva struttura spaziale)
+* NDVI loss (allinea al target agronomico)
+* Gradient loss (preserva variazioni locali)
+
+👉 risultato: riduzione dello smoothing e NDVI più realistico
+
+---
+
+## Risultati finali
+
+### Benchmark globale
+
+| Modello         |  PSNR NIR | SSIM NIR | PSNR NDVI | SSIM NDVI |
+| --------------- | --------: | -------: | --------: | --------: |
+| Baseline        |     17.88 |    0.442 |     23.34 |     0.667 |
+| SAM (prima)     |     23.65 |    0.490 |     24.96 |     0.662 |
+| SAM + NDVI/Grad | **24.10** |    0.467 | **25.47** | **0.691** |
+
+---
+
+### Benchmark ROI vegetata
+
+ROI definita come:
 
 ```
-TESI_SAM_NIR/
+NDVI_true > 0.3
+```
 
-configs/
-data/
-train/
-test_/
+| Modello         |  PSNR NIR |  SSIM NIR | PSNR NDVI | SSIM NDVI |
+| --------------- | --------: | --------: | --------: | --------: |
+| Baseline        |     22.13 |     0.427 |     24.88 |     0.688 |
+| SAM + NDVI/Grad | **22.88** | **0.919** | **25.80** | **0.916** |
 
-Sam_LoRA/
+---
+
+## Conclusione
+
+Il problema non era l'encoder SAM, ma la funzione di loss.
+
+La nuova loss:
+
+* riduce il bias verso soluzioni smooth
+* migliora la distribuzione NDVI
+* aumenta la qualità nelle regioni vegetate
+
+👉 problema della SSIM NDVI **risolto**
+
+---
+
+## Struttura progetto
+
+```
 sam_nir/
-
-model.py
-main_nvdi.py
-utils.py
+ ├── train_sam_nir.py
+ ├── infer_sam_nir.py
+ ├── compare_sam_ndvi_grad_vs_baseline.py
+ ├── sam_encoder_model.py
+ ├── dataset_sam_nir.py
+ ├── comparison_results_ndvi_grad.json
+ ├── comparison_results_roi_ndvi_grad.json
 ```
 
 ---
 
-# Dataset
-
-Il dataset è composto da triplette:
-
-```
-*_R.TIF
-*_G.TIF
-*_NIR.TIF
-```
-
-Il loader:
-
-* carica le bande
-* applica crop coerente
-* normalizza
-* restituisce tensori PyTorch
-
----
-
-# Formula NDVI
-
-```
-NDVI = (NIR - R) / (NIR + R)
-```
-
----
-
-# PARTE 1 — BASELINE (Swin2MoSE)
-
-## Input / Output
-
-```
-Input:  R + G
-Output: NIR
-```
-
----
-
-## Training baseline
+## Setup
 
 ```bash
-python main_nvdi.py --function train --config configs/config_linda.yaml --epochs 3
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install torch torchvision numpy matplotlib opencv-python pillow tqdm scikit-image timm safetensors
 ```
 
 ---
 
-## Validazione baseline
-
-```bash
-PYTHONPATH=. python main_nvdi.py \
---function validate \
---config configs/config_linda.yaml \
---ckpt ./checkpoint_model/ckpt_epoch_001.pth --image resize
-
-PYTHONPATH=. python main_nvdi.py \
---function validate \
---config configs/config_linda.yaml \
---ckpt ./checkpoint_model/ckpt_epoch_002.pth --image resize
-
-PYTHONPATH=. python main_nvdi.py \
---function validate \
---config configs/config_linda.yaml \
---ckpt ./checkpoint_model/ckpt_epoch_003.pth --image resize
-```
-
----
-
-## Test baseline
-
-```bash
-PYTHONPATH=. python main_nvdi.py \
---function test \
---config configs/config_linda.yaml \
---ckpt ./checkpoint_model/ckpt_epoch_002.pth --image resize
-```
-
----
-
-## Metriche baseline
-
-* PSNR
-* SSIM
-* PSNR NDVI
-* SSIM NDVI
-
----
-
-# PARTE 2 — INTEGRAZIONE SAM
-
-## Idea
-
-Usare l’encoder di SAM come backbone:
-
-```
-[R, G, G] → SAM encoder → decoder → NIR
-```
-
----
-
-## Setup SAM
-
-```bash
-mkdir -p checkpoints
-curl -L https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth \
--o checkpoints/sam_vit_b_01ec64.pth
-```
-
----
-
-## Test encoder SAM
-
-```bash
-python sam_nir/smoke_test_sam_nir.py
-```
-
-Output atteso:
-
-```
-output shape: torch.Size([1, 1, 1024, 1024])
-```
-
----
-
-## Training SAM → NIR
+## Training
 
 ```bash
 python sam_nir/train_sam_nir.py
 ```
 
-Output:
+Checkpoint finale:
 
 ```
-sam_nir/checkpoints/
+sam_nir/checkpoints_r8_mse_l1_edge_ndvi_grad/sam_nir_epoch_002.pth
 ```
 
 ---
 
-## Inferenza NIR (SAM)
+## Inferenza
 
 ```bash
 python sam_nir/infer_sam_nir.py
 ```
 
-Output:
-
-```
-sam_nir/predictions/
-```
-
 ---
 
-## Inferenza NDVI (SAM)
+## Confronto metriche
 
 ```bash
-python sam_nir/infer_sam_ndvi.py
-```
-
-Output:
-
-```
-sam_nir/ndvi_predictions/
+python sam_nir/compare_sam_ndvi_grad_vs_baseline.py
 ```
 
 ---
 
-# PARTE 3 — CONFRONTO BASELINE vs SAM
+## Output principali
 
-```bash
-PYTHONPATH=. python sam_nir/compare_sam_vs_baseline.py
+```
+sam_nir/ndvi_epoch2_r8_mse_l1_edge_ndvi_grad/
+sam_nir/comparison_results_ndvi_grad.json
+sam_nir/comparison_results_roi_ndvi_grad.json
 ```
 
 ---
 
-## Risultati ottenuti
+## Stato finale
 
-### Baseline
-
-* PSNR: 17.88
-* SSIM: 0.44
-* PSNR NDVI: 23.34
-* SSIM NDVI: 0.67
-
-### SAM
-
-* PSNR: 23.68
-* SSIM: 0.48
-* PSNR NDVI: 24.83
-* SSIM NDVI: 0.64
-
----
-
-## Interpretazione
-
-* SAM migliora la qualità della NIR
-* migliora PSNR NDVI
-* output più smooth → leggero calo SSIM NDVI
-
----
-
-# PARTE 4 — DEMO INTERATTIVA
-
-## Esecuzione
-
-```bash
-PYTHONPATH=. python sam_nir/demo_click_sam_ndvi.py \
---image /Users/.../immagine.png
-```
-
----
-
-## Pipeline
-
-1. input immagine RGB
-2. click utente
-3. segmentazione SAM
-4. predizione NIR
-5. calcolo NDVI
-6. overlay NDVI
-7. statistiche locali
-
----
-
-## Output demo
-
-```
-sam_nir/demo_outputs/
-```
-
-Contiene:
-
-* maschera SAM
-* NIR predetta
-* NDVI
-* overlay
-* report
-* statistiche JSON
-
----
-
-# Dipendenze
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install torch torchvision numpy matplotlib opencv-python pillow tqdm pyyaml timm safetensors
-```
-
----
-
-# Limitazioni
-
-* input SAM adattato `[R, G, G]`
-* SAM non fine-tuned su campi coltivati
-* output SAM più smooth
+✔ modello funzionante
+✔ metriche migliorate
+✔ problema smoothing risolto
+✔ pronto per presentazione tesi
 
 

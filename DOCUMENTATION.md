@@ -1,157 +1,161 @@
-# Documentazione codice — Generazione NIR e NDVI
+# Documentazione tecnica — Generazione NIR e NDVI
 
-## 1. Obiettivo del progetto
+## 1. Obiettivo
 
-Il progetto ha come obiettivo la generazione della banda NIR a partire da immagini RGB e il calcolo dell’NDVI, con confronto tra:
-- modello baseline (Swin2MoSE)
-- modello basato su SAM
+Generare la banda **NIR** da immagini RGB e calcolare l'**NDVI**, confrontando:
+
+* baseline Swin2MoSE
+* SAM + LoRA
+* SAM + LoRA con loss avanzata
 
 ---
 
 ## 2. Dataset
 
-Il dataset è composto da triplette:
-- R (Red)
-- G (Green)
-- NIR (target)
+Triplette:
 
-Pipeline:
-- crop coerente tra bande
-- normalizzazione min-max → [0,1]
-- opzionale mean/std
+```
+*_R.TIF
+*_G.TIF
+*_NIR.TIF
+```
 
-File principale:
-- `data/dataset_cropped.py`
+Loader:
+
+```
+sam_nir/dataset_sam_nir.py
+```
+
+Output:
+
+```
+image_sam = [R, G, G]
+image_r
+image_g
+image_nir
+image_name
+```
 
 ---
 
-## 3. Pipeline baseline
+## 3. NDVI
 
-### Input
-- [R, G]
+Formula:
 
-### Output
-- NIR
-
-### Modello
-- Swin2MoSE
-
-### File principali
-- `model.py`
-- `train/train.py`
-- `train/validate.py`
+```
+NDVI = (NIR - R) / (NIR + R)
+```
 
 ---
 
 ## 4. Pipeline SAM
 
-### Input
-- [R, G, G]
+Input:
 
-### Architettura
-- encoder: SAM pretrained (ViT-B)
-- LoRA applicato
-- decoder: convoluzionale
-
-### File principali
-- `sam_nir/sam_encoder_model.py`
-- `sam_nir/train_sam_nir.py`
-
----
-
-## 5. Calcolo NDVI
-
-Formula:
-
-NDVI = (NIR - R) / (NIR + R)
-
-Usato per:
-- valutazione
-- benchmark
-- demo
-
----
-
-## 6. Benchmark
-
-### 6.1 Benchmark globale
-Metriche su tutta l’immagine:
-- PSNR NIR
-- SSIM NIR
-- PSNR NDVI
-- SSIM NDVI
-
-Script:
-- `sam_nir/compare_sam_vs_baseline.py`
-
----
-
-### 6.2 Benchmark ROI
-Metriche su regioni selezionate:
-
-ROI definita come:
-- NDVI reale > 0.3
-
-Script:
-- `sam_nir/compare_sam_vs_baseline_roi.py`
-
----
-
-## 7. Risultati principali
-
-### Benchmark globale
-SAM migliora:
-- PSNR NIR
-- PSNR NDVI
-
-Baseline migliore su:
-- SSIM NDVI
-
-### Benchmark ROI
-Comportamento coerente:
-- SAM migliore su NIR
-- baseline leggermente migliore su SSIM NDVI
-
----
-
-## 8. Demo interattiva
+```
+[R, G, G]
+```
 
 Pipeline:
-1. input RGB
-2. click utente
-3. segmentazione SAM
-4. predizione NIR
-5. calcolo NDVI
-6. overlay su ROI
-7. statistiche
 
-File:
-- `sam_nir/demo_click_sam_ndvi.py`
+```
+SAM encoder + LoRA → decoder → NIR predetta
+```
 
 ---
 
-## 9. Struttura progetto
+## 5. Problema iniziale
 
-- data/ → dataset
-- train/ → training baseline
-- sam_nir/ → modelli SAM + benchmark
-- Sam_LoRA/ → implementazione LoRA
-- configs/ → configurazioni
+Effetti osservati:
 
----
+* smoothing eccessivo
+* perdita dettagli
+* NDVI poco variabile
+* SSIM NDVI peggiorata
 
-## 10. Stato attuale
+Causa:
 
-✔ baseline funzionante  
-✔ modello SAM funzionante  
-✔ benchmark globale  
-✔ benchmark ROI  
-✔ demo interattiva  
+```
+loss pixel-wise → soluzione media
+```
 
 ---
 
-## 11. Possibili sviluppi
+## 6. Loss finale
 
-- fine-tuning SAM su segmentazione agricola
-- ablation study (LoRA rank, decoder)
-- miglioramento SSIM NDVI
+```
+Loss totale =
+    MSE
+  + L1
+  + Edge
+  + NDVI
+  + Gradient
+```
+
+Effetti:
+
+* preserva bordi
+* migliora NDVI
+* riduce smoothing
+
+---
+
+## 7. Risultati globali
+
+```json
+{
+  "sam": {
+    "psnr": 24.10,
+    "ssim": 0.466,
+    "psnr_ndvi": 25.47,
+    "ssim_ndvi": 0.690
+  }
+}
+```
+
+---
+
+## 8. Risultati ROI
+
+ROI:
+
+```
+NDVI_true > 0.3
+```
+
+```json
+{
+  "sam_roi": {
+    "psnr": 22.88,
+    "ssim": 0.919,
+    "psnr_ndvi": 25.80,
+    "ssim_ndvi": 0.916
+  }
+}
+```
+
+---
+
+## 9. Conclusione tecnica
+
+Il limite principale era la loss.
+
+L'aggiunta di:
+
+* NDVI loss
+* Gradient loss
+
+ha portato a:
+
+* NDVI più realistico
+* maggiore variabilità
+* miglioramento SSIM NDVI
+
+---
+
+## 10. Stato finale
+
+✔ modello stabile
+✔ metriche migliorate
+✔ problema smoothing risolto
+✔ pronto per valutazione accademica
