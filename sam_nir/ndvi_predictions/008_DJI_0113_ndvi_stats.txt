@@ -1,7 +1,0 @@
-image_name: DJI_0113
-pred_ndvi_min: -0.234193
-pred_ndvi_max: 0.508488
-pred_ndvi_mean: 0.220123
-true_ndvi_min: -0.432143
-true_ndvi_max: 0.527936
-true_ndvi_mean: 0.173619

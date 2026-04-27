@@ -1,7 +1,0 @@
-image_name: DJI_0094
-pred_ndvi_min: -0.310273
-pred_ndvi_max: 0.586896
-pred_ndvi_mean: 0.265942
-true_ndvi_min: -0.387279
-true_ndvi_max: 0.628809
-true_ndvi_mean: 0.251479

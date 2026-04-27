@@ -1,6 +1,7 @@
 import os
 import sys
 import torch
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
 
@@ -10,6 +11,17 @@ if ROOT_DIR not in sys.path:
 
 from sam_nir.sam_encoder_model import SAMNIRModel
 from sam_nir.dataset_sam_nir import SAMNIRDataset
+
+
+# =========================
+# CONFIG ESPERIMENTO (r2)
+# =========================
+EXPERIMENT_NAME = "r8_mse_l1_edge_ndvi_grad"
+EPOCH = "002"
+LORA_RANK = 8
+
+CHECKPOINT_DIR = f"checkpoints_{EXPERIMENT_NAME}"
+OUTPUT_DIR = f"ndvi_epoch{int(EPOCH)}_{EXPERIMENT_NAME}"
 
 
 def build_val_dataset():
@@ -33,25 +45,53 @@ def build_val_dataset():
     )
 
 
+def calculate_ndvi(nir, red, eps=1e-8):
+    return (nir - red) / (nir + red + eps)
+
+
+def save_ndvi_colormap(ndvi_tensor, save_path, title="NDVI"):
+    ndvi_np = ndvi_tensor.squeeze().detach().cpu().numpy()
+
+    plt.figure(figsize=(4, 4))
+    plt.imshow(ndvi_np, cmap="RdYlGn", vmin=-1, vmax=1)
+    plt.colorbar()
+    plt.title(title)
+    plt.axis("off")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150)
+    plt.close()
+
+
 def main():
     device = "mps" if torch.backends.mps.is_available() else "cpu"
+    print("device:", device)
 
     sam_ckpt = os.path.join(ROOT_DIR, "checkpoints", "sam_vit_b_01ec64.pth")
-    model_ckpt = os.path.join(ROOT_DIR, "sam_nir", "checkpoints", "sam_nir_epoch_002.pth")
-    out_dir = os.path.join(ROOT_DIR, "sam_nir", "predictions")
+
+    model_ckpt = os.path.join(
+        ROOT_DIR,
+        "sam_nir",
+        CHECKPOINT_DIR,
+        f"sam_nir_epoch_{EPOCH}.pth",
+    )
+
+    out_dir = os.path.join(ROOT_DIR, "sam_nir", OUTPUT_DIR)
     os.makedirs(out_dir, exist_ok=True)
+
+    print("model_ckpt:", model_ckpt)
+    print("out_dir:", out_dir)
 
     dataset = build_val_dataset()
     loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
 
     model = SAMNIRModel(
         sam_ckpt_path=sam_ckpt,
-        lora_rank=4,
+        lora_rank=LORA_RANK,
         freeze_encoder=True,
     ).to(device)
 
     ckpt = torch.load(model_ckpt, map_location="cpu")
-    model.load_state_dict(ckpt["model_state_dict"])
+    model.load_state_dict(ckpt["model_state_dict"], strict=True)
     model.eval()
 
     with torch.no_grad():
@@ -64,12 +104,54 @@ def main():
 
             pred = model(x)
 
-            # salvataggio confronto: R | G | pred | gt
-            grid = torch.cat([r, g, pred, y], dim=3)
-            save_path = os.path.join(out_dir, f"{i:03d}_{name}_sam_nir.png")
-            save_image(grid, save_path)
+            pred = pred.clamp(0, 1)
+            y = y.clamp(0, 1)
+            r = r.clamp(0, 1)
+            g = g.clamp(0, 1)
 
-            print("saved:", save_path)
+            ndvi_pred = calculate_ndvi(pred, r)
+            ndvi_true = calculate_ndvi(y, r)
+
+            ndvi_pred_vis = ((ndvi_pred + 1.0) / 2.0).clamp(0, 1)
+            ndvi_true_vis = ((ndvi_true + 1.0) / 2.0).clamp(0, 1)
+
+            suffix = f"{EXPERIMENT_NAME}_epoch{EPOCH}"
+
+            grid = torch.cat([r, g, pred, y, ndvi_pred_vis, ndvi_true_vis], dim=3)
+
+            grid_path = os.path.join(
+                out_dir,
+                f"{i:03d}_{name}_sam_ndvi_{suffix}_grid.png",
+            )
+            pred_color_path = os.path.join(
+                out_dir,
+                f"{i:03d}_{name}_ndvi_pred_{suffix}.png",
+            )
+            true_color_path = os.path.join(
+                out_dir,
+                f"{i:03d}_{name}_ndvi_true_{suffix}.png",
+            )
+            stats_path = os.path.join(
+                out_dir,
+                f"{i:03d}_{name}_ndvi_stats_{suffix}.txt",
+            )
+
+            save_image(grid, grid_path)
+            save_ndvi_colormap(ndvi_pred, pred_color_path, title=f"Pred NDVI - {name}")
+            save_ndvi_colormap(ndvi_true, true_color_path, title=f"True NDVI - {name}")
+
+            with open(stats_path, "w") as f:
+                f.write(f"image_name: {name}\n")
+                f.write(f"experiment: {EXPERIMENT_NAME}\n")
+                f.write(f"epoch: {EPOCH}\n")
+                f.write(f"pred_ndvi_min: {ndvi_pred.min().item():.6f}\n")
+                f.write(f"pred_ndvi_max: {ndvi_pred.max().item():.6f}\n")
+                f.write(f"pred_ndvi_mean: {ndvi_pred.mean().item():.6f}\n")
+                f.write(f"true_ndvi_min: {ndvi_true.min().item():.6f}\n")
+                f.write(f"true_ndvi_max: {ndvi_true.max().item():.6f}\n")
+                f.write(f"true_ndvi_mean: {ndvi_true.mean().item():.6f}\n")
+
+            print("saved:", grid_path)
 
             if i >= 9:
                 break

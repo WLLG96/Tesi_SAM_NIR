@@ -1,7 +1,6 @@
 import os
 import sys
 import torch
-import numpy as np
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
@@ -56,9 +55,11 @@ def main():
     device = "mps" if torch.backends.mps.is_available() else "cpu"
 
     sam_ckpt = os.path.join(ROOT_DIR, "checkpoints", "sam_vit_b_01ec64.pth")
-    model_ckpt = os.path.join(ROOT_DIR, "sam_nir", "checkpoints", "sam_nir_epoch_002.pth")
+    model_ckpt = os.path.join(
+        ROOT_DIR, "sam_nir", "checkpoints_r8_mse_l1_edge", "sam_nir_epoch_002.pth"
+    )
 
-    out_dir = os.path.join(ROOT_DIR, "sam_nir", "ndvi_predictions")
+    out_dir = os.path.join(ROOT_DIR, "sam_nir", "ndvi_predictions_r8_mse_l1_edge")
     os.makedirs(out_dir, exist_ok=True)
 
     dataset = build_val_dataset()
@@ -66,12 +67,12 @@ def main():
 
     model = SAMNIRModel(
         sam_ckpt_path=sam_ckpt,
-        lora_rank=4,
+        lora_rank=8,
         freeze_encoder=True,
     ).to(device)
 
     ckpt = torch.load(model_ckpt, map_location="cpu")
-    model.load_state_dict(ckpt["model_state_dict"])
+    model.load_state_dict(ckpt["model_state_dict"], strict=True)
     model.eval()
 
     with torch.no_grad():
@@ -84,27 +85,29 @@ def main():
 
             pred = model(x)
 
+            pred = pred.clamp(0, 1)
+            y = y.clamp(0, 1)
+            r = r.clamp(0, 1)
+            g = g.clamp(0, 1)
+
             ndvi_pred = calculate_ndvi(pred, r)
             ndvi_true = calculate_ndvi(y, r)
 
-            # Per visualizzazione immagini grayscale su save_image:
             ndvi_pred_vis = ((ndvi_pred + 1.0) / 2.0).clamp(0, 1)
             ndvi_true_vis = ((ndvi_true + 1.0) / 2.0).clamp(0, 1)
 
             # salva confronto: R | G | NIR pred | NIR true | NDVI pred | NDVI true
             grid = torch.cat([r, g, pred, y, ndvi_pred_vis, ndvi_true_vis], dim=3)
-            grid_path = os.path.join(out_dir, f"{i:03d}_{name}_sam_ndvi_grid.png")
+            grid_path = os.path.join(out_dir, f"{i:03d}_{name}_sam_ndvi_r8_mse_l1_edge_grid.png")
             save_image(grid, grid_path)
 
-            # salva colormap NDVI
-            pred_color_path = os.path.join(out_dir, f"{i:03d}_{name}_ndvi_pred.png")
-            true_color_path = os.path.join(out_dir, f"{i:03d}_{name}_ndvi_true.png")
+            pred_color_path = os.path.join(out_dir, f"{i:03d}_{name}_ndvi_pred_r8_mse_l1_edge.png")
+            true_color_path = os.path.join(out_dir, f"{i:03d}_{name}_ndvi_true_r8_mse_l1_edge.png")
 
             save_ndvi_colormap(ndvi_pred, pred_color_path, title=f"Pred NDVI - {name}")
             save_ndvi_colormap(ndvi_true, true_color_path, title=f"True NDVI - {name}")
 
-            # statistiche semplici
-            stats_path = os.path.join(out_dir, f"{i:03d}_{name}_ndvi_stats.txt")
+            stats_path = os.path.join(out_dir, f"{i:03d}_{name}_ndvi_stats_r8_mse_l1_edge.txt")
             with open(stats_path, "w") as f:
                 f.write(f"image_name: {name}\n")
                 f.write(f"pred_ndvi_min: {ndvi_pred.min().item():.6f}\n")

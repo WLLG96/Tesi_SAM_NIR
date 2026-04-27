@@ -16,7 +16,9 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 CONFIG_PATH = os.path.join(ROOT_DIR, "configs", "config_linda.yaml")
 BASELINE_CKPT_PATH = os.path.join(ROOT_DIR, "checkpoint_model", "ckpt_epoch_002.pth")
-SAM_CKPT_PATH = os.path.join(ROOT_DIR, "sam_nir", "checkpoints", "sam_nir_epoch_002.pth")
+SAM_CKPT_PATH = os.path.join(
+    ROOT_DIR, "sam_nir", "checkpoints_r8_mse_l1_edge", "sam_nir_epoch_002.pth"
+)
 SAM_ENCODER_CKPT = os.path.join(ROOT_DIR, "checkpoints", "sam_vit_b_01ec64.pth")
 
 ROI_NDVI_THRESHOLD = 0.30
@@ -35,27 +37,17 @@ def psnr_from_mse(err, data_range=1.0, eps=1e-12):
 
 
 def _align_pred_to_target(pred, y):
-    """
-    Allinea output del modello al target:
-    - se tuple/list -> prende pred[0]
-    - se canali > 1 e target è 1 canale -> prende il primo canale
-    - se size diversa -> interpolazione
-    """
     if isinstance(pred, (tuple, list)):
         pred = pred[0]
 
     if pred.dim() != 4:
-        raise ValueError(
-            f"pred deve essere 4D [B,C,H,W], trovato shape={tuple(pred.shape)}"
-        )
+        raise ValueError(f"pred deve essere 4D [B,C,H,W], trovato shape={tuple(pred.shape)}")
 
     if pred.size(1) != y.size(1):
         if y.size(1) == 1 and pred.size(1) > 1:
             pred = pred[:, :1, :, :]
         else:
-            raise ValueError(
-                f"Mismatch canali: pred={pred.size(1)}, target={y.size(1)}"
-            )
+            raise ValueError(f"Mismatch canali: pred={pred.size(1)}, target={y.size(1)}")
 
     if pred.shape[-2:] != y.shape[-2:]:
         pred = F.interpolate(pred, size=y.shape[-2:], mode="bilinear", align_corners=False)
@@ -115,7 +107,7 @@ def load_sam_model(device):
     print("Loading SAM model...")
     model = SAMNIRModel(
         sam_ckpt_path=SAM_ENCODER_CKPT,
-        lora_rank=4,
+        lora_rank=8,
         freeze_encoder=True,
     ).to(device)
 
@@ -163,6 +155,7 @@ def main():
     sam_model = load_sam_model(device)
 
     results = {
+        "sam_variant": "r8_mse_l1_edge_epoch_002",
         "roi_definition": f"ndvi_true > {ROI_NDVI_THRESHOLD}",
         "baseline_roi": {
             "psnr": 0.0,
@@ -190,12 +183,10 @@ def main():
         g = sample["image_g"].to(device).float()
         y = sample["image_nir"].to(device).float()
 
-        # Baseline
         x_base = torch.cat([r, g], dim=1)
         pred_base = baseline_model(x_base)
         pred_base = _align_pred_to_target(pred_base, y)
 
-        # SAM
         x_sam = torch.cat([r, g, g], dim=1)
         pred_sam = sam_model(x_sam)
         pred_sam = _align_pred_to_target(pred_sam, y)
@@ -220,7 +211,6 @@ def main():
         results["n_images_with_roi"] += 1
         total_roi_pixels += roi_pixels
 
-        # PSNR su ROI - NIR
         mse_base_roi = masked_mse(pred_base, y, roi_mask)
         mse_sam_roi = masked_mse(pred_sam, y, roi_mask)
 
@@ -229,7 +219,6 @@ def main():
         if mse_sam_roi is not None:
             results["sam_roi"]["psnr"] += psnr_from_mse(mse_sam_roi, data_range=1.0)
 
-        # PSNR su ROI - NDVI
         mse_base_ndvi_roi = masked_mse(ndvi_base, ndvi_true, roi_mask)
         mse_sam_ndvi_roi = masked_mse(ndvi_sam, ndvi_true, roi_mask)
 
@@ -238,7 +227,6 @@ def main():
         if mse_sam_ndvi_roi is not None:
             results["sam_roi"]["psnr_ndvi"] += psnr_from_mse(mse_sam_ndvi_roi, data_range=2.0)
 
-        # SSIM su ROI via bounding box
         roi_mask_np = roi_mask[0, 0].cpu().numpy().astype(bool)
 
         y_np = y[0, 0].cpu().numpy()
@@ -287,7 +275,7 @@ def main():
     print("\n===== ROI RESULTS =====")
     print(json.dumps(results, indent=2))
 
-    save_path = os.path.join(ROOT_DIR, "sam_nir", "comparison_results_roi.json")
+    save_path = os.path.join(ROOT_DIR, "sam_nir", "comparison_results_roi_r8_mse_l1_edge.json")
     with open(save_path, "w") as f:
         json.dump(results, f, indent=2)
 

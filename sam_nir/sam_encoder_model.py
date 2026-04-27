@@ -13,19 +13,33 @@ from sam_lora import LoRA_Sam
 
 
 class SimpleNIRDecoder(nn.Module):
-    def __init__(self, in_channels=256, out_channels=1):
-        super().__init__()
-        self.decoder = nn.Sequential(
-            nn.Conv2d(in_channels, 128, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
+    """
+    Decoder vecchio compatibile con i checkpoint esistenti:
+    chiavi attese nel checkpoint:
+    - decoder.decoder.0.*
+    - decoder.decoder.2.*
+    - decoder.decoder.4.*
+    """
 
+    def __init__(self, in_ch=256, out_ch=1):
+        super().__init__()
+
+        self.decoder = nn.Sequential(
+            nn.Conv2d(in_ch, 128, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
             nn.Conv2d(128, 64, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-
-            nn.Conv2d(64, out_channels, kernel_size=1)
+            nn.Conv2d(64, out_ch, kernel_size=1),
+            nn.Sigmoid(),
         )
 
-    def forward(self, x):
+    def forward(self, sam_feats, output_size):
+        x = F.interpolate(
+            sam_feats,
+            size=output_size,
+            mode="bilinear",
+            align_corners=False,
+        )
         return self.decoder(x)
 
 
@@ -49,12 +63,18 @@ class SAMNIRModel(nn.Module):
             for p in self.encoder.parameters():
                 p.requires_grad = False
 
-        self.decoder = SimpleNIRDecoder(in_channels=256, out_channels=1)
+        self.decoder = SimpleNIRDecoder(
+            in_ch=256,
+            out_ch=1,
+        )
 
     def forward(self, x):
-        original_size = x.shape[-2:]  # es. (128, 128)
+        """
+        x: [B,3,H,W] = [R,G,G]
+        output: [B,1,H,W] in [0,1]
+        """
+        original_size = x.shape[-2:]
 
-        # SAM vuole input 1024x1024
         x_resized = F.interpolate(
             x,
             size=(self.sam_input_size, self.sam_input_size),
@@ -62,23 +82,11 @@ class SAMNIRModel(nn.Module):
             align_corners=False,
         )
 
-        feats = self.encoder(x_resized)   # [B,256,64,64]
-        nir = self.decoder(feats)         # [B,1,64,64]
+        sam_feats = self.encoder(x_resized)
 
-        # prima riportiamo a 1024x1024
-        nir = F.interpolate(
-            nir,
-            size=(self.sam_input_size, self.sam_input_size),
-            mode="bilinear",
-            align_corners=False,
-        )
-
-        # poi torniamo alla size originale del dataset
-        nir = F.interpolate(
-            nir,
-            size=original_size,
-            mode="bilinear",
-            align_corners=False,
+        nir = self.decoder(
+            sam_feats=sam_feats,
+            output_size=original_size,
         )
 
         return nir

@@ -20,3 +20,22 @@ logs/
 checkpoint_model/
 checkpoints/
 
+__pycache__/
+*.pyc
+.venv/
+
+# modelli pesanti
+*.pth
+*.pt
+
+# dataset
+datasets/
+
+# output
+sam_nir/checkpoints*/
+sam_nir/ndvi_epoch*/
+sam_nir/predictions*/
+sam_nir/logs*/
+
+# zip
+*.zip

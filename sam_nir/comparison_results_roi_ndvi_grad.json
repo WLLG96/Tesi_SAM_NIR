@@ -1,4 +1,5 @@
 {
+  "sam_variant": "r8_mse_l1_edge_ndvi_grad_epoch_002",
   "roi_definition": "ndvi_true > 0.3",
   "baseline_roi": {
     "psnr": 22.132965218692966,
@@ -8,11 +9,11 @@
     "valid_ssim_images": 72
   },
   "sam_roi": {
-    "psnr": 23.106058063168597,
-    "ssim": 0.4704039306372134,
-    "psnr_ndvi": 25.96906110690196,
-    "ssim_ndvi": 0.654859453624209,
-    "valid_ssim_images": 72
+    "psnr": 22.879500374544357,
+    "ssim": 0.9195597366211771,
+    "psnr_ndvi": 25.801800294689723,
+    "ssim_ndvi": 0.9166193046463799,
+    "valid_ssim_images": 73
   },
   "n_images": 74,
   "n_images_with_roi": 74,

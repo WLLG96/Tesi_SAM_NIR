@@ -2,7 +2,6 @@ import os
 import json
 import math
 import torch
-import numpy as np
 from tqdm import tqdm
 from skimage.metrics import structural_similarity as sk_ssim
 from torchmetrics.image import PeakSignalNoiseRatio
@@ -16,7 +15,9 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 CONFIG_PATH = os.path.join(ROOT_DIR, "configs", "config_linda.yaml")
 BASELINE_CKPT_PATH = os.path.join(ROOT_DIR, "checkpoint_model", "ckpt_epoch_002.pth")
-SAM_CKPT_PATH = os.path.join(ROOT_DIR, "sam_nir", "checkpoints", "sam_nir_epoch_002.pth")
+SAM_CKPT_PATH = os.path.join(
+    ROOT_DIR, "sam_nir", "checkpoints_r8_mse_l1_edge", "sam_nir_epoch_002.pth"
+)
 SAM_ENCODER_CKPT = os.path.join(ROOT_DIR, "checkpoints", "sam_vit_b_01ec64.pth")
 
 
@@ -39,7 +40,7 @@ def load_sam_model(device):
     print("Loading SAM model...")
     model = SAMNIRModel(
         sam_ckpt_path=SAM_ENCODER_CKPT,
-        lora_rank=4,
+        lora_rank=8,
         freeze_encoder=True,
     ).to(device)
 
@@ -90,6 +91,7 @@ def main():
     psnr_metric = PeakSignalNoiseRatio(data_range=1.0).to(device)
 
     results = {
+        "sam_variant": "r8_mse_l1_edge_epoch_002",
         "baseline": {"psnr": 0.0, "ssim": 0.0, "psnr_ndvi": 0.0, "ssim_ndvi": 0.0},
         "sam": {"psnr": 0.0, "ssim": 0.0, "psnr_ndvi": 0.0, "ssim_ndvi": 0.0},
         "n": 0
@@ -159,7 +161,7 @@ def main():
     print("\n===== FINAL RESULTS =====")
     print(json.dumps(results, indent=2))
 
-    save_path = os.path.join(ROOT_DIR, "sam_nir", "comparison_results.json")
+    save_path = os.path.join(ROOT_DIR, "sam_nir", "comparison_results_r8_mse_l1_edge.json")
     with open(save_path, "w") as f:
         json.dump(results, f, indent=2)
 

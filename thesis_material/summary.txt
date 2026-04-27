@@ -1,0 +1,53 @@
+RISULTATI PRINCIPALI
+
+Dataset:
+- 74 immagini RGB-NIR utilizzate per la valutazione
+- Task: generazione della banda NIR e calcolo NDVI
+
+----------------------------------------
+Benchmark globale (intera immagine)
+----------------------------------------
+
+NIR:
+- SAM migliora significativamente il PSNR (23.7 vs 17.9)
+- SAM migliora leggermente anche l’SSIM
+
+NDVI:
+- SAM migliora il PSNR NDVI
+- La baseline mantiene un SSIM NDVI leggermente migliore
+
+----------------------------------------
+Benchmark ROI (NDVI > 0.3)
+----------------------------------------
+
+Definizione ROI:
+- Pixel con NDVI reale > 0.3 (aree vegetate)
+
+NIR:
+- SAM migliora sia PSNR che SSIM nella regione di interesse
+
+NDVI:
+- SAM migliora il PSNR NDVI anche nella ROI
+- La baseline mantiene un SSIM NDVI leggermente migliore
+
+----------------------------------------
+Interpretazione dei risultati
+----------------------------------------
+
+- Il modello basato su SAM risulta più accurato in termini di errore medio (PSNR)
+- Questo vale sia a livello globale che nelle aree vegetate (ROI)
+- Tuttavia, SAM tende a produrre output più smooth
+- Questo comportamento porta a una leggera perdita di dettaglio strutturale (SSIM)
+
+----------------------------------------
+Conclusione
+----------------------------------------
+
+L’encoder di SAM si dimostra un backbone efficace per la generazione della banda NIR,
+superando la baseline in termini di accuratezza media.
+
+Il trade-off osservato è tra:
+- maggiore accuratezza (SAM)
+- maggiore preservazione delle strutture locali (baseline)
+
+Questo risultato è coerente con il comportamento tipico di modelli basati su feature semantiche.
