@@ -1,0 +1,32 @@
+{
+  "Baseline Swin2MoSE": {
+    "loss": "-",
+    "psnr_ndvi": 23.335960906055156,
+    "ssim_ndvi": 0.6674589870466829,
+    "roi_ssim_ndvi": 0.6881595913907548
+  },
+  "SAM r8": {
+    "loss": "MSE + L1",
+    "psnr_ndvi": 24.958065792626797,
+    "ssim_ndvi": 0.6624185214823676,
+    "roi_ssim_ndvi": 0.670980846564244
+  },
+  "MSE_L1_Edge": {
+    "loss": "MSE + L1 + Edge",
+    "psnr_ndvi": 25.230097957291296,
+    "ssim_ndvi": 0.6751310353235658,
+    "roi_ssim_ndvi": 0.9096897625599191
+  },
+  "MSE_L1_Edge_NDVI": {
+    "loss": "MSE + L1 + Edge + NDVI",
+    "psnr_ndvi": 25.472926721408584,
+    "ssim_ndvi": 0.6906788417509386,
+    "roi_ssim_ndvi": 0.9166271875187608
+  },
+  "MSE_L1_Edge_NDVI_Grad": {
+    "loss": "MSE + L1 + Edge + NDVI + Grad",
+    "psnr_ndvi": 25.4722031367498,
+    "ssim_ndvi": 0.690530981747249,
+    "roi_ssim_ndvi": 0.9166193046463799
+  }
+}
